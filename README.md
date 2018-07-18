@@ -42,3 +42,13 @@ Servlet initialisation parameters:
       ListenAddress   IP address for receiving gateway XMF notifications
       ListenPort      IP port for receiving gateway XMF notifications and servlet requests
       ListenPath      Servlet URL path for gateway XMF notifications
+      
+Things still to be done:
+
+      Complete documentation and explanatory notes.
+      Handle session reconnection after break or initial failure to connect.
+      Re-registration after keepalives missed and session closed at the gateway.
+      Add configurable debug and logging especially to turn RTP stream diagnostic messaging on/off.
+      Check safe across multiple concurrent servlet requests, synchronise transaction ID etc.
+
+
