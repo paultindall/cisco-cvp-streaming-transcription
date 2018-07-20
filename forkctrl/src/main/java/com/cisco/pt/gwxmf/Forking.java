@@ -11,7 +11,7 @@ package com.cisco.pt.gwxmf;
  * ===================================================================================
  *
  * GATEWAY MEDIA FORKING SERVLET
- * 
+ *
  * Provides a simple microservice approach to controlling media forking at the gateway.
  * Its primary use is to allow a CVP application to send the caller media stream to an
  * external server for processing such as transcription or sentiment analysis.
@@ -24,7 +24,7 @@ package com.cisco.pt.gwxmf;
  *      action          START or STOP
  *      callerStream    Target address and port
  *      ivrStream       Target address and port
- *      
+ *
  * Servlet initialisation parameters:
  *      GatewayHostList Comma separated list of gateway hostnames or IP addresses
  *      ListenAddress   IP address for receiving gateway XMF notifications
@@ -61,6 +61,8 @@ import javax.xml.soap.SOAPException;
 import javax.xml.soap.SOAPMessage;
 import org.json.JSONException;
 import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -79,15 +81,16 @@ import org.w3c.dom.Node;
 
 
 public class Forking extends HttpServlet {
-    
+    private static final Logger logger = LoggerFactory.getLogger(Forking.class);
+
     static final String XMF_XMLNS = "http://www.cisco.com/schema/cisco_xmf/v1_0";
 
-    String app_listen_addr;    
-    String app_listen_port = "80";    
-    String app_listen_path = "/forking";    
+    String app_listen_addr;
+    String app_listen_port = "80";
+    String app_listen_path = "/forking";
 
-    ConcurrentHashMap<String, GatewayCall> callmap = new ConcurrentHashMap<>();         
-    ConcurrentHashMap<String, GatewayXmf> gwmap = new ConcurrentHashMap<>();         
+    ConcurrentHashMap<String, GatewayCall> callmap = new ConcurrentHashMap<>();
+    ConcurrentHashMap<String, GatewayXmf> gwmap = new ConcurrentHashMap<>();
 
 
     @Override
@@ -96,14 +99,14 @@ public class Forking extends HttpServlet {
         super.init(config);
 
         String initp;
-        
+
         if ((initp = getInitParameter("ListenPort")) != null) app_listen_port = initp;
         if ((initp = getInitParameter("ListenPath")) != null) app_listen_path = initp;
         app_listen_addr = getInitParameter("ListenAddress");
         if (app_listen_addr == null) {
             try {app_listen_addr = InetAddress.getLocalHost().getHostAddress();} catch (UnknownHostException ex) { }
         }
-        
+
 // ***** WORK TO BE DONE =======================================================
 // Handle session reconnection after break or initial failure to connect
 // Add debug setting and configurable logging
@@ -120,36 +123,36 @@ public class Forking extends HttpServlet {
                 gw.register();
 
             } catch (GatewayXmfException | SOAPException | UnknownHostException ex) {
-                System.out.println("Error creating gateway " + gwhost + ": " + ex.getMessage());
+                logger.error("Error creating gateway " + gwhost, ex);
             }
         });
     }
-    
-    
+
+
     @Override
     protected void doPut(HttpServletRequest req, HttpServletResponse resp) throws ServletException, IOException {
-        
+
         String[] pathitems;
 
         if (req.getPathInfo() == null || (pathitems = req.getPathInfo().split("/")).length < 2) {
-            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid URL path, missing mandatory fields");                
+            resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid URL path, missing mandatory fields");
 
-        } else {    
-            String callid = pathitems[1];            
+        } else {
+            String callid = pathitems[1];
             GatewayCall gwcall = callmap.get("GUID:" + callid);
-            
+
             if (gwcall == null) {
-                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Call with ID " + callid + " does not exist");                
-                
-            } else if (!gwmap.containsKey(gwcall.gwaddr)) {                
+                resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Call with ID " + callid + " does not exist");
+
+            } else if (!gwmap.containsKey(gwcall.gwaddr)) {
                 resp.sendError(HttpServletResponse.SC_INTERNAL_SERVER_ERROR, "Gateway for call ID " + callid + " does not exist");
 
             } else {
-                
+
 // Process transcription or media forking control command
 
                 String path = req.getServletPath();
-                System.out.println("\nRequest (" + path + ") for GUID " + callid + "\n");
+                logger.info("Request ({}) for GUID {}", path, callid);
 
                 BufferedReader streamReader = new BufferedReader(new InputStreamReader(req.getInputStream()));
                 StringBuilder reqcontent = new StringBuilder();
@@ -161,7 +164,7 @@ public class Forking extends HttpServlet {
 
                 try {
                     JSONObject reqbody = new JSONObject(reqcontent.toString());
-                    System.out.println(reqbody.toString(4));
+                    logger.debug(reqbody.toString(4));
 
                     resp.setStatus(HttpServletResponse.SC_ACCEPTED);
                     resp.setContentType("application/json");
@@ -177,7 +180,7 @@ public class Forking extends HttpServlet {
                             rspbody = doTranscription(gwcall, reqbody);
                             break;
                     }
-                    
+
                     try (PrintWriter out = resp.getWriter()) {
                         if (rspbody != null) {
                             rspbody.write(out);
@@ -189,8 +192,8 @@ public class Forking extends HttpServlet {
 
                 } catch (JSONException ex) {
                     resp.sendError(HttpServletResponse.SC_BAD_REQUEST, "Invalid request format: " + ex.getMessage());
-                    System.out.println("Invalid request JSON payload: " + ex.getMessage());
-                    System.out.println(reqcontent.toString());
+                    logger.error("Invalid request JSON payload", ex);
+                    logger.debug(reqcontent.toString());
 
                 } catch (MediaForkingException ex) {
                     String httperr = ex.getMessage();
@@ -198,7 +201,7 @@ public class Forking extends HttpServlet {
                     resp.sendError(HttpServletResponse.SC_BAD_REQUEST, httperr);
                 }
             }
-        }                    
+        }
     }
 
 
@@ -211,7 +214,7 @@ public class Forking extends HttpServlet {
             case "START":
                 JSONObject cg = forkreq.getJSONObject("calling");
                 JSONObject cd = forkreq.getJSONObject("called");
-                
+
                 gw.startForking(gwcall.callid, cg.getString("address"), cg.getString("port"),
                                                cd.getString("address"), cd.getString("port"));
                 break;
@@ -225,7 +228,7 @@ public class Forking extends HttpServlet {
         }
     }
 
-    
+
     private JSONObject doTranscription(GatewayCall gwcall, JSONObject transcribereq) throws IOException, MediaForkingException {
 
         GatewayXmf gw = gwmap.get(gwcall.gwaddr);
@@ -242,7 +245,7 @@ public class Forking extends HttpServlet {
         gw.startForking(gwcall.callid, app_listen_addr, Integer.toString(xbr.cgrtp.getPort()), app_listen_addr, Integer.toString(xbr.cdrtp.getPort()));
         JSONObject results = xbr.transcribe(stream);
         gw.stopForking(gwcall.callid);
-        
+
         return results;
     }
 
@@ -255,19 +258,18 @@ public class Forking extends HttpServlet {
             try (ServletOutputStream out = resp.getOutputStream()) {
 
 // Extract the GSAPI notification body content
-                
+
                 String gwip = req.getRemoteAddr();
                 SOAPMessage msg = gwmap.get(gwip).msgfct.createMessage(null, req.getInputStream());
-                System.out.println("\n--- Received message from " + gwip + " ---\n");
-                msg.writeTo(System.out);                
-                System.out.println();
+                logger.debug("--- Received message from {} ---", gwip);
+                SoapUtil.writeToDebugLog(logger, msg);
 
                 SOAPBody body = msg.getSOAPBody();
                 Document xmfmsg = body.extractContentAsDocument();
                 Element msgelem = xmfmsg.getDocumentElement();
                 String msgtype = msgelem.getLocalName();
-                System.out.println("\n--- Message type is " + msgtype + " ---\n");
-                
+                logger.debug("--- Message type is {} ---", msgtype);
+
 // Detect message type, handle call and media notifications, handle probes and respond to keep-alive the connection
 
                 JAXBContext jaxbCtx = JAXBContext.newInstance("com.cisco.schema.cisco_xmf.v1_0");
@@ -284,7 +286,7 @@ public class Forking extends HttpServlet {
                                 case "msgHeader":
                                 case "sequence":
                                     break;
-                                    
+
                                 default:
                                     msgelem.removeChild(n);
                                     break;
@@ -302,8 +304,8 @@ public class Forking extends HttpServlet {
 
                     case "NotifyXmfCallData":
                         NotifyXmfCallData cd = jaxbUnmar.unmarshal(xmfmsg, NotifyXmfCallData.class).getValue();
-                        System.out.println("Call ID: " + cd.getCallData().getCallID());
-                        System.out.println("Forking State: " + cd.getMediaEvent().getMediaForking().getMediaForkingState());
+                        logger.debug("Call ID: {}", cd.getCallData().getCallID());
+                        logger.debug("Forking State: {}", cd.getMediaEvent().getMediaForking().getMediaForkingState());
                         xmfmsg = null;
                         break;
 
@@ -322,7 +324,7 @@ public class Forking extends HttpServlet {
                                 String calling = detail.getCallingAddrData().getAddr();
                                 String called = detail.getCalledAddrData().getAddr();
 
-                                System.out.printf("Call %s, direction %s, from %s to %s, ID %s, leg %s, GUID %s%n", 
+                                logger.debug("Call {}, direction {}, from {} to {}, ID {}, leg {}, GUID {}",
                                         callstate, direction, calling, called, callid, connid, guid);
 
                                 if ("OUTGOING".equals(direction)) {
@@ -343,26 +345,26 @@ public class Forking extends HttpServlet {
                                 break;
 
                             case "DISCONNECTED":
-                                System.out.printf("Call %s, ID %s, leg %s%n", callstate, callid, connid);
+                                logger.debug("Call {}, ID {}, leg {}", callstate, callid, connid);
                                 GatewayCall gwcall = callmap.remove("CALL:" + callid);
                                 if (gwcall != null) callmap.remove("GUID:" + gwcall.guid);
-                                break;                                                                
-                                
+                                break;
+
                             default:
                                 break;
                         }
 
 // Add debug setting later to turn on/off or retrieve calls via web request
 
-                        if (false) {
+                        if (logger.isTraceEnabled()) {
                             callmap.forEach((k, c) -> {
                                 if (k.startsWith("CALL:")) {
-                                    System.out.printf("%s, ID %s, GUID %s, leg %s, from %s to %s%n", 
+                                    logger.trace("{}, ID {}, GUID {}, leg {}, from {} to {}",
                                             c.direction, c.callid, c.guid, c.outleg, c.calling, c.called);
                                 }
                             });
                         }
-                        
+
                         xmfmsg = null;
                         break;
                 }
@@ -372,9 +374,8 @@ public class Forking extends HttpServlet {
                     resp.setContentType("application/soap+xml");
                     msg.writeTo(out);
 
-                    System.out.println("--- Sent XMF response ---\n");
-                    msg.writeTo(System.out);
-                    System.out.println();
+                    logger.debug("--- Sent XMF response ---");
+                    SoapUtil.writeToDebugLog(logger, msg);
                 }
 
             } catch (JAXBException | SOAPException ex) {
@@ -383,7 +384,7 @@ public class Forking extends HttpServlet {
         }
     }
 
-    
+
 // <editor-fold defaultstate="collapsed" desc="HttpServlet methods. Click on the + sign on the left to edit the code.">
     /**
      * Returns a short description of the servlet.

@@ -29,6 +29,10 @@ import com.cisco.schema.cisco_xmf.v1_0.ProviderData;
 import com.cisco.schema.cisco_xmf.v1_0.RequestXmfCallMediaForking;
 import com.cisco.schema.cisco_xmf.v1_0.RequestXmfRegister;
 import com.cisco.schema.cisco_xmf.v1_0.ResponseXmfRegister;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
@@ -46,6 +50,7 @@ import javax.xml.soap.SOAPMessage;
 
 
 public class GatewayXmf {
+    private static final Logger logger = LoggerFactory.getLogger(GatewayXmf.class);
 
     String CONNECTION_EVENTS = "CONNECTED DISCONNECTED";
     String MEDIA_EVENTS = "MEDIA_ACTIVITY";
@@ -97,7 +102,7 @@ public class GatewayXmf {
             Unmarshaller jaxbUnmar = jaxbCtx.createUnmarshaller();
             ResponseXmfRegister rspreg = jaxbUnmar.unmarshal(rsp.getSOAPBody().extractContentAsDocument(), ResponseXmfRegister.class).getValue();
             regid = rspreg.getMsgHeader().getRegistrationID();
-            System.out.println("Gateway connection successful to " + iphost + ", registration ID = " + regid);
+            logger.info("Gateway connection successful to {}, registration ID = {}", iphost, regid);
             active = true;
 
         } catch (JAXBException | SOAPException | UnsupportedOperationException ex ) {
@@ -182,18 +187,16 @@ public class GatewayXmf {
             SOAPBody body = env.getBody();
             jaxbMar.marshal(jaxbe, body);
 
-            System.out.println("\n--- " + jaxbe.getClass().getSimpleName() + " to gateway " + iphost + " ---\n");
-            msg.writeTo(System.out);
-            System.out.println();
+            logger.debug("--- {} to gateway {} ---", jaxbe.getClass().getSimpleName(), iphost);
+            SoapUtil.writeToDebugLog(logger, msg);
 
             con = SOAPConnectionFactory.newInstance().createConnection();
             rsp = con.call(msg, xmfurl);
             con.close();
 
-            System.out.println("\n--- Gateway XMF response ---\n");
-            rsp.writeTo(System.out);
-            System.out.println();
-            
+            logger.debug("--- Gateway XMF response ---");
+            SoapUtil.writeToDebugLog(logger, rsp);
+
             SOAPFault fault = rsp.getSOAPBody().getFault();
             if (fault != null) {
                 throw new GatewayXmfException(fault);

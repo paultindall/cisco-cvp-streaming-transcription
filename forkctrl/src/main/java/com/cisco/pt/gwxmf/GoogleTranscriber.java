@@ -20,21 +20,21 @@ package com.cisco.pt.gwxmf;
  */
 
 import com.google.api.gax.rpc.BidiStream;
-import com.google.cloud.speech.v1p1beta1.RecognitionConfig;
-import com.google.cloud.speech.v1p1beta1.SpeechClient;
-import com.google.cloud.speech.v1p1beta1.SpeechRecognitionAlternative;
-import com.google.cloud.speech.v1p1beta1.StreamingRecognitionConfig;
-import com.google.cloud.speech.v1p1beta1.StreamingRecognitionResult;
-import com.google.cloud.speech.v1p1beta1.StreamingRecognizeRequest;
-import com.google.cloud.speech.v1p1beta1.StreamingRecognizeResponse;
-import static com.google.cloud.speech.v1p1beta1.StreamingRecognizeResponse.SpeechEventType.*;
+import com.google.cloud.speech.v1p1beta1.*;
 import com.google.protobuf.ByteString;
+import org.json.JSONObject;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.text.DecimalFormat;
-import org.json.JSONObject;
+import java.util.stream.Collectors;
+
+import static com.google.cloud.speech.v1p1beta1.StreamingRecognizeResponse.SpeechEventType.END_OF_SINGLE_UTTERANCE;
 
 
 public class GoogleTranscriber {
+    private static final Logger logger = LoggerFactory.getLogger(GoogleTranscriber.class);
 
     private final String DEFAULT_LANGUAGE = "en-US";
     MediaListener cgrtp;
@@ -94,18 +94,25 @@ public class GoogleTranscriber {
             });
 
             for (StreamingRecognizeResponse rsp : stream) {
-
-                System.out.println("====================================================");
-                System.out.println("Error: " + rsp.getError().getCode() + " " + rsp.getError().getMessage());
-                System.out.println("Event: " + rsp.getSpeechEventType().toString());
-                rsp.getResultsList().iterator().forEachRemaining(action -> {
-                    System.out.println("Final: " + action.getIsFinal());
-                    action.getAlternativesList().iterator().forEachRemaining(tr -> {
-                        System.out.println("Transcript: " + tr.getTranscript());
-                        System.out.println("Confidence: " + tr.getConfidence());
-                    });
-                });
-                System.out.println("----------------------------------------------------");
+                if (logger.isDebugEnabled()) {
+                    String results = rsp.getResultsList().stream().map((result) -> {
+                        String transcripts = result.getAlternativesList().stream()
+                                .map((alt) -> String.format("Transcript: %s\nConfidence: %f",
+                                        alt.getTranscript(),
+                                        alt.getConfidence()))
+                                .collect(Collectors.joining("\n"));
+                        return String.format("Final: %b\n%s", result.getIsFinal(), transcripts);
+                    }).collect(Collectors.joining("\n"));
+                    logger.debug("====================================================\n" +
+                                    "Error: {} {}\n" +
+                                    "Event: {}\n" +
+                                    "{}\n" +
+                                    "----------------------------------------------------",
+                            rsp.getError().getCode(),
+                            rsp.getError().getMessage(),
+                            rsp.getSpeechEventType(),
+                            results);
+                }
 
                 if (rsp.getSpeechEventType().equals(END_OF_SINGLE_UTTERANCE)) {
                     rtp.discardMedia();

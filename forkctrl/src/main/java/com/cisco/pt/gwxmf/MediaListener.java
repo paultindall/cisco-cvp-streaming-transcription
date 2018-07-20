@@ -20,6 +20,9 @@ package com.cisco.pt.gwxmf;
  * -----------------------------------------------------------------------------------
  */
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -30,6 +33,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.function.Consumer;
 
 public class MediaListener {
+    private static final Logger logger = LoggerFactory.getLogger(MediaListener.class);
 
     static int RTPBASEPORT = 16384;
     static int RTPBUFLEN = 172;
@@ -83,9 +87,9 @@ public class MediaListener {
         CompletableFuture.runAsync(() -> {
             try {
                 SocketAddress client = chn.receive(rxbuf);
-//                System.out.format("Received %d bytes on port %d from %s%n",  rxbuf.position(), rxport, client);
+                logger.trace("Received {} bytes on port {} from {}",  rxbuf.position(), rxport, client);
             } catch (IOException ex) {
-                System.out.println(ex);
+                logger.error("Error reading from socket", ex);
             }
 
         }).thenRunAsync(() -> {
@@ -94,7 +98,7 @@ public class MediaListener {
                 byte[] hdr = Arrays.copyOfRange(rxbuf.array(), 0, 12);
                 byte[] payload = Arrays.copyOfRange(rxbuf.array(), 12, pktlen);
                 long seq = (((int) hdr[2] & 0xff) << 8) + (((int) hdr[3]) & 0xff);
-//                System.out.format("Processing RTP packet on port %d, bytes = %d, sequence = %d%n", rxport, pktlen, seq);
+                logger.trace("Processing RTP packet on port {}, bytes = {}, sequence = {}", rxport, pktlen, seq);
                 pkthandler.accept(payload);
             }
             rxbuf.clear();
