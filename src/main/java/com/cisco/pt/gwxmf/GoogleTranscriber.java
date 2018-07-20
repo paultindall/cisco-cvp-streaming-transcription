@@ -69,7 +69,13 @@ public class GoogleTranscriber {
     }
 
 
-    public JSONObject transcribeCaller() throws IOException {
+    public void close() throws IOException {
+        cgrtp.close();
+        cdrtp.close();
+    }
+
+
+    public JSONObject tracnscribeCaller() throws IOException {
         return transcribe(cgrtp);
     }
 

@@ -51,6 +51,11 @@ public class MediaListener {
     }
 
 
+    public void close() throws IOException {
+        chn.close();
+    }
+    
+    
     public void start() {
         if (!active) {
             readAsync();
