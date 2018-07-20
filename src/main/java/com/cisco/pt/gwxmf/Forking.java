@@ -73,7 +73,7 @@ import org.w3c.dom.Node;
             {
 //              @WebInitParam(name = "ListenPath", value = "/xmfnotify")
                 @WebInitParam(name = "GatewayHostList", value = "rmlab-cube2"),
-                @WebInitParam(name = "ListenAddress", value = "10.61.196.19"),
+                @WebInitParam(name = "ListenAddress", value = "10.61.245.91"),
                 @WebInitParam(name = "ListenPort", value = "9090")
             })
 
@@ -232,11 +232,15 @@ public class Forking extends HttpServlet {
         GoogleTranscriber xbr = gwcall.transcriber;
 
         if (xbr == null) {
-            xbr = gwcall.transcriber = new GoogleTranscriber(app_listen_addr);
+            xbr = gwcall.transcriber = new GoogleTranscriber(app_listen_addr, transcribereq.getString("language"));
         }
 
+        String party = transcribereq.optString("party", "calling").toUpperCase();
+        MediaListener stream = "CALLING".equals(party) ? xbr.cgrtp :
+                               "CALLED".equals(party) ? xbr.cdrtp : xbr.cgrtp;
+
         gw.startForking(gwcall.callid, app_listen_addr, Integer.toString(xbr.cgrtp.getPort()), app_listen_addr, Integer.toString(xbr.cdrtp.getPort()));
-        JSONObject results = xbr.transcribeCaller();
+        JSONObject results = xbr.transcribe(stream);
         gw.stopForking(gwcall.callid);
         
         return results;
