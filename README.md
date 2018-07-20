@@ -67,7 +67,8 @@ https://cloud.google.com/speech-to-text/docs/quickstart-client-libraries for inf
 
 Things still to be done
 
-      Complete documentation and explanatory notes.
+      Complete documentation and explanatory notes / diagram.
+      Use double buffering or a pool per UDP channel to minimise packet loss under load.
       Handle session reconnection after break or initial failure to connect.
       Re-registration after keepalives missed and session closed at the gateway.
       Add configurable debug and logging especially to turn RTP stream diagnostic messaging on/off.
