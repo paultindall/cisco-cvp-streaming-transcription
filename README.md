@@ -1,6 +1,6 @@
 # cisco-cvp-streaming-transcription
 
-Gateway media forking control and streaming transcription using Google Speech API.
+Gateway media forking control and streaming transcription using Google Speech-to-Text API.
 
 Provides a simple microservice approach to controlling media forking at the gateway.
 Its primary use is to allow a CVP or desktop application to send the caller media stream to an
@@ -11,18 +11,28 @@ For testing use Postman or similar.
 The call leg ID to use in the request URL path is the CVP callid variable which is the same as
 the VRU leg call GUID and user.media.id variable in ICM.
 
-Operations:
+Operations
 
       Start media forking from the gateway.
       Stop media forking.
       Combined media forking and transcription using streaming to Google Speech-To-Text service.
 
-HTTP PUT request URLs:
+HTTP PUT request URLs
 
       http://<host:port/path>/forking/<call_leg_ID>
       http://<host:port/path>/transcription/<call_leg_ID>
 
-Request JSON body items for forking control:
+Request JSON body items for transcription
+
+      party           CALLING or CALLED (case independent, optional, defaults to the caller's media stream)
+      language        Language locale code (optional, default is en-US)
+      
+      Example
+      
+      {"party": "calling",
+       "language": "en-GB"}
+      
+Request JSON body items for forking control
 
       action          START or STOP
       calling         Target address and port
@@ -51,7 +61,11 @@ The remote URL points to your media forking control servlet, to which call notif
         provider xmf
           remote-url http://10.61.68.102:9090/forkctrl/forking
 
-Things still to be done:
+Using Google Speech-to-Text API
+
+https://cloud.google.com/speech-to-text/docs/quickstart-client-libraries for information on enabling access and configuring the environment variable GOOGLE_APPLICATION_CREDENTIALS.
+
+Things still to be done
 
       Complete documentation and explanatory notes.
       Handle session reconnection after break or initial failure to connect.
