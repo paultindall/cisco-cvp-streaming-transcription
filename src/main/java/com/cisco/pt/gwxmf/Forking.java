@@ -232,7 +232,7 @@ public class Forking extends HttpServlet {
         GoogleTranscriber xbr = gwcall.transcriber;
 
         if (xbr == null) {
-            xbr = gwcall.transcriber = new GoogleTranscriber(app_listen_addr, transcribereq.getString("language"));
+            xbr = gwcall.transcriber = new GoogleTranscriber(app_listen_addr, transcribereq.optString("language", null));
         }
 
         String party = transcribereq.optString("party", "calling").toUpperCase();
