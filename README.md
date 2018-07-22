@@ -6,6 +6,8 @@ Provides a simple microservice approach to controlling media forking at the gate
 Its primary use is to allow a CVP or desktop application to send the caller media stream to an
 external server for processing such as transcription or sentiment analysis.
 
+![](CVP_Google_Speech_To_Text_Diagram.png)
+
 From CVP Call Studio just use the built-in REST Client element to invoke the web app.
 For testing use Postman or similar.
 The call leg ID to use in the request URL path is the CVP callid variable which is the same as
