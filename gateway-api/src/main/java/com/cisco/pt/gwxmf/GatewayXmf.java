@@ -108,6 +108,9 @@ public class GatewayXmf {
             } catch (JAXBException | SOAPException | UnsupportedOperationException ex) {
                 active.set(false);
                 throw new GatewayXmfException("XMF register error", ex);
+            } catch (Exception e) {
+                active.set(false);
+                throw e;
             }
         } else {
             throw new IllegalStateException("Double register attempt");
