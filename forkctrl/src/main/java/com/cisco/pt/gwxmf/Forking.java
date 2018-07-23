@@ -22,9 +22,13 @@ package com.cisco.pt.gwxmf;
  *
  * Request JSON body items for forking control:
  *      action          START or STOP
- *      callerStream    Target address and port
- *      ivrStream       Target address and port
- *
+ *      calling         Target address and port
+ *      called          Target address and port
+ *      
+ * Request JSON body items for transcription:
+ *      language        Locale code
+ *      party           CALLING or CALLED
+ *      
  * Servlet initialisation parameters:
  *      GatewayHostList Comma separated list of gateway hostnames or IP addresses
  *      ListenAddress   IP address for receiving gateway XMF notifications
@@ -229,16 +233,15 @@ public class Forking extends HttpServlet {
     }
 
 
-    private JSONObject doTranscription(GatewayCall gwcall, JSONObject transcribereq) throws IOException, MediaForkingException {
-
+    private JSONObject doTranscription(GatewayCall gwcall, JSONObject transreq) throws IOException, MediaForkingException {
         GatewayXmf gw = gwmap.get(gwcall.gwaddr);
         GoogleTranscriber xbr = gwcall.transcriber;
 
         if (xbr == null) {
-            xbr = gwcall.transcriber = new GoogleTranscriber(app_listen_addr, transcribereq.optString("language", null));
+            xbr = gwcall.transcriber = new GoogleTranscriber(app_listen_addr, transreq.optString("language", null));
         }
 
-        String party = transcribereq.optString("party", "calling").toUpperCase();
+        String party = transreq.optString("party", "calling").toUpperCase();
         MediaListener stream = "CALLING".equals(party) ? xbr.cgrtp :
                                "CALLED".equals(party) ? xbr.cdrtp : xbr.cgrtp;
 
@@ -347,9 +350,14 @@ public class Forking extends HttpServlet {
                             case "DISCONNECTED":
                                 logger.debug("Call {}, ID {}, leg {}", callstate, callid, connid);
                                 GatewayCall gwcall = callmap.remove("CALL:" + callid);
-                                if (gwcall != null) callmap.remove("GUID:" + gwcall.guid);
-                                break;
-
+                                if (gwcall != null) {
+                                    callmap.remove("GUID:" + gwcall.guid);
+                                    if (gwcall.transcriber != null) {
+                                        gwcall.transcriber.close();
+                                    }
+                                }
+                                break;                                                                
+                                
                             default:
                                 break;
                         }
