@@ -7,7 +7,7 @@
     <root level="info">
         <appender-ref ref="STDOUT"/>
     </root>
-    <logger name="com.com.cisco" level="debug" additivity="false">
+    <logger name="com.cisco" level="debug" additivity="false">
         <appender-ref ref="STDOUT"/>
     </logger>
 </configuration>
