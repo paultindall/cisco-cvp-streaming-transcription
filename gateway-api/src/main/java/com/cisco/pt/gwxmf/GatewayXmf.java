@@ -32,8 +32,9 @@ import com.cisco.schema.cisco_xmf.v1_0.ResponseXmfRegister;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import javax.xml.bind.JAXBContext;
 import javax.xml.bind.JAXBException;
 import javax.xml.bind.Marshaller;
@@ -52,62 +53,65 @@ import javax.xml.soap.SOAPMessage;
 public class GatewayXmf {
     private static final Logger logger = LoggerFactory.getLogger(GatewayXmf.class);
 
-    String CONNECTION_EVENTS = "CONNECTED DISCONNECTED";
-    String MEDIA_EVENTS = "MEDIA_ACTIVITY";
-    String APP_NAME = "com.cisco.pt.cvp.forking";
-    String GW_XMF_URL = "http://%s:8090/cisco_xmf";
+    private static final String CONNECTION_EVENTS = "CONNECTED DISCONNECTED";
+    private static final String MEDIA_EVENTS = "MEDIA_ACTIVITY";
+    private static final String APP_NAME = "com.cisco.pt.cvp.forking";
+    private static final String GW_XMF_URL = "http://%s:8090/cisco_xmf";
 
-    String iphost;
-    String appurl;
-    String xmfurl;
-    String regid;
-    int transaction;
-    boolean active;
+    private final String iphost;
+    private final String appurl;
+    private final String xmfurl;
+    private volatile String regid;
+    private final AtomicInteger transaction;
+    private final AtomicBoolean active;
 
-    MessageFactory msgfct;
+    final MessageFactory msgfct;
 
 
     public GatewayXmf(String iphost, String appurl) throws SOAPException {
         this.iphost = iphost;
         this.appurl = appurl;
-        
+        this.xmfurl = String.format(GW_XMF_URL, iphost);
+        this.transaction = new AtomicInteger(0);
+        this.active = new AtomicBoolean(false);
+
         msgfct = MessageFactory.newInstance(SOAPConstants.SOAP_1_2_PROTOCOL);
     }
     
 
     public void register() throws GatewayXmfException {
+        if (active.compareAndSet(false, true)) {
+            try {
+                RequestXmfRegister reg = new RequestXmfRegister();
+                MsgHeader msghdr = new MsgHeader();
+                ProviderData prvdata = new ProviderData();
+                ApplicationData appdata = new ApplicationData();
 
-        xmfurl = String.format(GW_XMF_URL, iphost);
+                msghdr.setTransactionID(String.valueOf(transaction.incrementAndGet()));
+                prvdata.setUrl(xmfurl);
+                appdata.setName(APP_NAME);
+                appdata.setUrl(appurl);
 
-        try {
-            RequestXmfRegister reg = new RequestXmfRegister();
-            MsgHeader msghdr = new MsgHeader();
-            ProviderData prvdata = new ProviderData();
-            ApplicationData appdata = new ApplicationData();
+                reg.setConnectionEventsFilter(CONNECTION_EVENTS);
+                reg.setMediaEventsFilter(MEDIA_EVENTS);
+                reg.setApplicationData(appdata);
+                reg.setProviderData(prvdata);
+                reg.setMsgHeader(msghdr);
 
-            msghdr.setTransactionID(String.valueOf(++transaction));
-            prvdata.setUrl(xmfurl);
-            appdata.setName(APP_NAME);
-            appdata.setUrl(appurl);
+                SOAPMessage rsp = sendRequest(reg);
 
-            reg.setConnectionEventsFilter(CONNECTION_EVENTS);
-            reg.setMediaEventsFilter(MEDIA_EVENTS);
-            reg.setApplicationData(appdata);
-            reg.setProviderData(prvdata);
-            reg.setMsgHeader(msghdr);
-
-            SOAPMessage rsp = sendRequest(reg);
-
-            JAXBContext jaxbCtx = JAXBContext.newInstance("com.cisco.schema.cisco_xmf.v1_0");
-            Unmarshaller jaxbUnmar = jaxbCtx.createUnmarshaller();
-            ResponseXmfRegister rspreg = jaxbUnmar.unmarshal(rsp.getSOAPBody().extractContentAsDocument(), ResponseXmfRegister.class).getValue();
-            regid = rspreg.getMsgHeader().getRegistrationID();
-            logger.info("Gateway connection successful to {}, registration ID = {}", iphost, regid);
-            active = true;
-
-        } catch (JAXBException | SOAPException | UnsupportedOperationException ex ) {
-            throw new GatewayXmfException("XMF register error", ex);
-        }        
+                JAXBContext jaxbCtx = JAXBContext.newInstance("com.cisco.schema.cisco_xmf.v1_0");
+                Unmarshaller jaxbUnmar = jaxbCtx.createUnmarshaller();
+                ResponseXmfRegister rspreg = jaxbUnmar.unmarshal(rsp.getSOAPBody().extractContentAsDocument(), ResponseXmfRegister.class).getValue();
+                regid = rspreg.getMsgHeader().getRegistrationID();
+                logger.info("Gateway connection successful to {}, registration ID = {}", iphost, regid);
+            } catch (JAXBException | SOAPException | UnsupportedOperationException ex) {
+                active.set(false);
+                throw new GatewayXmfException("XMF register error", ex);
+            }
+        } else {
+            throw new IllegalStateException("Double register attempt");
+        }
     }
 
 
@@ -133,7 +137,7 @@ public class GatewayXmf {
             
             MsgHeader msghdr = new MsgHeader();
             msghdr.setRegistrationID(regid);
-            msghdr.setTransactionID(String.valueOf(++transaction));
+            msghdr.setTransactionID(String.valueOf(transaction.incrementAndGet()));
             
             fork.setCallID(gwcallid);
             fork.setMsgHeader(msghdr);
@@ -159,7 +163,7 @@ public class GatewayXmf {
             
             MsgHeader msghdr = new MsgHeader();
             msghdr.setRegistrationID(regid);
-            msghdr.setTransactionID(String.valueOf(++transaction));
+            msghdr.setTransactionID(String.valueOf(transaction.incrementAndGet()));
             
             fork.setCallID(gwcallid);
             fork.setMsgHeader(msghdr);
@@ -173,7 +177,7 @@ public class GatewayXmf {
     }
 
 
-    SOAPMessage sendRequest(Object jaxbe) throws GatewayXmfException {
+    private SOAPMessage sendRequest(Object jaxbe) throws GatewayXmfException {
 
         SOAPConnection con = null;
         SOAPMessage rsp = null;
