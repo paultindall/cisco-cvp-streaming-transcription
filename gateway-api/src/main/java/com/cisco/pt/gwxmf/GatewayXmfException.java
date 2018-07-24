@@ -11,7 +11,7 @@ package com.cisco.pt.gwxmf;
  * ===================================================================================
  *
  * GSAPI XMF COMMUNICATION EXCEPTION
- * 
+ *
  * Handles detailed failure information returned as SOAP fault.
  *
  * -----------------------------------------------------------------------------------
@@ -22,8 +22,8 @@ package com.cisco.pt.gwxmf;
 import java.util.Iterator;
 import javax.xml.soap.Detail;
 import javax.xml.soap.DetailEntry;
+import javax.xml.soap.Node;
 import javax.xml.soap.SOAPFault;
-import org.w3c.dom.Element;
 
 public class GatewayXmfException extends Exception {
 
@@ -41,7 +41,7 @@ public class GatewayXmfException extends Exception {
     public GatewayXmfException (SOAPFault fault) {
         super("XMF operation failed");
         reason = fault.getFaultString();
-        getFaultDetails(fault.getDetail());        
+        getFaultDetails(fault.getDetail());
     }
 
     public GatewayXmfException (Throwable cause) {
@@ -60,20 +60,20 @@ public class GatewayXmfException extends Exception {
         if (detailText != null) msg += " (" + detailText + ")";
         return msg;
     }
-    
+
     private void getFaultDetails(Detail faultDet) {
-        Iterator<Element> children = ((DetailEntry) faultDet.getDetailEntries().next()).getChildElements();
+        Iterator<Node> children = ((DetailEntry) faultDet.getDetailEntries().next()).getChildElements();
 
         children.forEachRemaining((e) -> {
             switch (e.getNodeName()) {
                 case "text":
                     detailText = e.getTextContent();
                     break;
-                    
+
                 case "operation":
                     detailOperation = e.getTextContent();
                     break;
             }
-        });        
+        });
     }
 }
